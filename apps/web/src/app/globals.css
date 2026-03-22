@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #1B3A6B;
+  --color-accent: #2E75B6;
+  --color-light-blue: #E8EEF7;
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+  --color-error: #DC2626;
+  --color-dark-text: #1A1A1A;
+  --color-mid-gray: #555555;
+  --color-border: #E5E7EB;
+}
+
+/* Custom utilities */
+.text-primary { color: var(--color-primary); }
+.bg-primary { background-color: var(--color-primary); }
+.text-accent { color: var(--color-accent); }
+.bg-light-blue { background-color: var(--color-light-blue); }
+.border-primary { border-color: var(--color-primary); }
+
+/* Verified comment checkmark */
+.verified-checkmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+/* AI content indicator */
+.ai-content {
+  background: linear-gradient(135deg, #E8EEF7 0%, #dce8f8 100%);
+  border-left: 3px solid var(--color-accent);
+}
+
+/* Pending points: always amber */
+.pending-points { color: var(--color-warning); }
+
+/* Active points: always blue */
+.active-points { color: var(--color-primary); }
+
+/* Level badges */
+.badge-member { background: #6B7280; color: white; }
+.badge-opinion-leader { background: var(--color-accent); color: white; }
+.badge-community-expert { background: #D97706; color: white; }
+.badge-research-scholar { background: var(--color-primary); color: white; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }

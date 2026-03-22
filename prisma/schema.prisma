@@ -1,0 +1,951 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// IMS News Central — Prisma Schema
+//
+// INVARIANTS (NEVER violate these):
+// 1. pendingPoints and activePoints are SEPARATE fields on User — never combined.
+// 2. Comment checkmark (OPINION_VERIFIED) requires fieldExpertApproverId AND
+//    leaderApproverId to both be non-null — two independent approvers.
+// 3. 60-day expiry is per batch — each PendingPointExpiry row has its own clock.
+//
+// ENCRYPTED COLUMNS (encrypted/decrypted in service layer, not here):
+//   User.phoneNumber
+//   FieldExpert.cvDocumentUrl, academicCredentials, publishedWorks
+//   PresentationRequest.meetingLink, leaderNote, cancellationReason, evidenceLink
+//   PaperReviewSubmission.paperFileUrl, feedbackReport
+//   ResearchTeamApplication.motivation, background
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  MEMBER
+  OPINION_LEADER
+  COMMUNITY_EXPERT
+  FIELD_EXPERT
+  EDITOR
+  LEADER
+  PLATFORM_MANAGER
+  ADMIN
+}
+
+enum MemberType {
+  IMS_MEMBER
+  NON_IMS_MEMBER
+}
+
+enum UserLevel {
+  MEMBER
+  OPINION_LEADER
+  COMMUNITY_EXPERT
+}
+
+enum CommentStatus {
+  PENDING_EDITOR
+  PUBLISHED
+  REJECTED_EDITOR
+  PENDING_OPINION_REVIEW
+  OPINION_EXPERT_APPROVED
+  OPINION_VERIFIED
+  OPINION_REJECTED
+}
+
+enum PointState {
+  PENDING
+  ACTIVE
+  EXPIRED
+  WIPED
+}
+
+enum PresentationStatus {
+  PENDING
+  RE_REQUESTED
+  ESCALATED
+  SCHEDULED
+  COMPLETED
+  APPROVED
+  CANCELLED
+  DISPUTED
+  EXPIRED
+}
+
+enum LeaderDecision {
+  APPROVED
+  CANCELLED
+}
+
+enum MeetingPlatform {
+  zoom
+  google_meet
+  teams
+  other
+}
+
+enum VideoUploadStatus {
+  PENDING
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum VideoDifficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum ExternalEmbedType {
+  YOUTUBE
+  VIMEO
+  DAILYMOTION
+  DIRECT_URL
+}
+
+enum ResearchTeamStatus {
+  FORMING
+  ACTIVE
+  REVIEW_STAGE
+  SUBMITTED
+  PUBLISHED
+}
+
+enum ResearchTeamMemberRole {
+  LEAD
+  CONTRIBUTOR
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WAITLISTED
+}
+
+enum AcademyTrack {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum PaperReviewStatus {
+  SUBMITTED
+  ASSIGNED
+  UNDER_REVIEW
+  FEEDBACK_SENT
+  REVISED
+  PUBLISHED
+}
+
+enum PolicyShiftType {
+  MAJOR_SHIFT
+  MINOR_UPDATE
+  REAFFIRMATION
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USER & AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  profileImage String?
+  phoneNumber  String?    // ENCRYPTED — see top-of-file note
+  role         UserRole   @default(MEMBER)
+  memberType   MemberType @default(NON_IMS_MEMBER)
+  level        UserLevel  @default(MEMBER)
+
+  // Community assignment
+  communityId      String?
+  community        Community? @relation(fields: [communityId], references: [id])
+  assignedLeaderId String?
+  assignedLeader   User?      @relation("LeaderMembers", fields: [assignedLeaderId], references: [id])
+
+  // Points — NEVER combine these two fields in any query
+  pendingPoints Int @default(0) // Amber in UI — hidden from public profile
+  activePoints  Int @default(0) // Blue in UI — drives level progression
+
+  emailVerified Boolean @default(false)
+  isActive      Boolean @default(true)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastActiveAt DateTime @default(now())
+
+  // Relations
+  fieldExpertProfile         FieldExpert?
+  community_led              Community[]              @relation("CommunityLeader")
+  members                    User[]                   @relation("LeaderMembers")
+  comments                   Comment[]                @relation("CommentAuthor")
+  commentsExpertApproved     Comment[]                @relation("CommentExpertApprover")
+  commentsLeaderApproved     Comment[]                @relation("CommentLeaderApprover")
+  commentsEditorApproved     Comment[]                @relation("CommentEditorApprover")
+  commentLikes               CommentLike[]
+  opinions                   Opinion[]
+  presentationsAsMember      PresentationRequest[]    @relation("MemberPresentations")
+  presentationsAsLeader      PresentationRequest[]    @relation("LeaderPresentations")
+  pointTransactions          PointTransaction[]
+  pendingPointExpiries       PendingPointExpiry[]
+  knowledgePapersAdded       JournalPaper[]           @relation("PaperAddedBy")
+  foreignPolicyEntriesAdded  ForeignPolicyEntry[]     @relation("PolicyEntryAddedBy")
+  foreignPolicyAnnotations   ForeignPolicyEntry[]     @relation("PolicyEntryAnnotatedBy")
+  videosAdded                Video[]                  @relation("VideoAddedBy")
+  researchGroupsChaired      ResearchGroup[]          @relation("GroupChair")
+  researchTeamsLed           ResearchTeam[]           @relation("TeamLead")
+  researchTeamMemberships    ResearchTeamMember[]
+  researchTeamApplications   ResearchTeamApplication[]
+  paperReviewSubmissions     PaperReviewSubmission[]
+  paperReviewsAssigned       PaperReviewSubmission[]  @relation("ReviewerAssigned")
+  courseProgress             MemberCourseProgress[]
+  notifications              Notification[]
+  opinionPointRequests       OpinionPointRequest[]    @relation("OPRRequestedBy")
+  growthReports              MemberGrowthReport[]
+
+  @@index([email])
+  @@index([role])
+  @@index([level])
+  @@index([communityId])
+  @@index([assignedLeaderId])
+}
+
+model Community {
+  id          String @id @default(cuid())
+  name        String
+  city        String
+  country     String
+  region      String
+  leaderId    String
+  leader      User   @relation("CommunityLeader", fields: [leaderId], references: [id])
+  memberCount Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members User[]
+
+  @@index([leaderId])
+}
+
+model FieldExpert {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  approvedField String // Single field — server-enforced boundary
+  // All fields below are ENCRYPTED — decrypted only in secure-fields.service.ts
+  cvDocumentUrl        String? // ENCRYPTED — Supabase Storage path
+  academicCredentials  String? // ENCRYPTED JSON
+  publishedWorks       String? // ENCRYPTED JSON
+
+  verificationStatus VerificationStatus @default(PENDING)
+  verifiedAt         DateTime?
+  verifiedById       String? // Admin who approved
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expertApprovedComments Comment[] @relation("CommentExpertApproverFK")
+
+  @@index([approvedField]) // Critical for field boundary queries
+  @@index([verificationStatus])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEWS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model NewsSource {
+  id               String   @id @default(cuid())
+  name             String
+  rssUrl           String   @unique
+  websiteUrl       String?
+  logoUrl          String?
+  credibilityLabel String?
+  region           String?
+  isActive         Boolean  @default(true)
+  lastScrapedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stories NewsStorySource[]
+
+  @@index([isActive])
+}
+
+model NewsStory {
+  id            String @id @default(cuid())
+  canonicalHash String @unique // SHA-256(normalize(title)+YYYY-MM-DD) — deduplication key
+  title         String
+  slug          String @unique
+
+  // AI processing
+  aiSummary     String? @db.Text
+  summaryStatus String  @default("PENDING") // "PENDING" | "DONE" | "FAILED"
+
+  // Classification — saved as suggested by AI, confirmed by editor
+  topics    String[] // Array of topic slugs
+  countries String[] // Array of ISO 3166-1 alpha-2 codes
+  tagsConfirmedAt DateTime? // null = AI suggested, non-null = editor confirmed
+
+  publishedAt DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sources  NewsStorySource[]
+  opinions Opinion[]
+  comments Comment[]
+
+  // Full-text search vector (maintained by PostgreSQL trigger)
+  searchVector Unsupported("tsvector")?
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([summaryStatus])
+  @@index([topics])
+  @@index([countries])
+}
+
+model NewsStorySource {
+  id        String @id @default(cuid())
+  storyId   String
+  story     NewsStory  @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourceId  String
+  source    NewsSource @relation(fields: [sourceId], references: [id])
+
+  originalUrl   String  @unique
+  originalTitle String
+  excerpt       String? @db.Text
+  publishedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([storyId])
+  @@index([sourceId])
+}
+
+model Opinion {
+  id         String @id @default(cuid())
+  authorId   String
+  author     User   @relation(fields: [authorId], references: [id])
+  authorType String // "IMS_LEADER" | "EXTERNAL_EXPERT"
+
+  // Target — exactly one of these is non-null
+  newsStoryId  String?
+  newsStory    NewsStory?   @relation(fields: [newsStoryId], references: [id])
+  journalPaperId String?
+  journalPaper JournalPaper? @relation(fields: [journalPaperId], references: [id])
+
+  title   String
+  content String @db.Text
+  status  String @default("DRAFT") // "DRAFT" | "PUBLISHED"
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([authorId])
+  @@index([newsStoryId])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMMENTS — Critical: two-approver state machine
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Comment {
+  id      String        @id @default(cuid())
+  content String        @db.Text
+  status  CommentStatus @default(PENDING_EDITOR)
+
+  // Target — exactly one of these is non-null
+  newsStoryId    String?
+  newsStory      NewsStory?    @relation(fields: [newsStoryId], references: [id])
+  journalPaperId String?
+  journalPaper   JournalPaper? @relation(fields: [journalPaperId], references: [id])
+  videoId        String?
+  video          Video?        @relation(fields: [videoId], references: [id])
+
+  // Threaded replies
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies  Comment[] @relation("CommentReplies")
+
+  // Author
+  authorId String
+  author   User   @relation("CommentAuthor", fields: [authorId], references: [id])
+
+  // INVARIANT: Both must be non-null for OPINION_VERIFIED status
+  // Either can approve first — order is not enforced
+  fieldExpertApproverId String?      // Independent approver 1
+  fieldExpertApprover   FieldExpert? @relation("CommentExpertApproverFK", fields: [fieldExpertApproverId], references: [id])
+  expertApprovedAt      DateTime?
+  expertApproverUserId  String?
+  expertApproverUser    User?        @relation("CommentExpertApprover", fields: [expertApproverUserId], references: [id])
+
+  leaderApproverId String?  // Independent approver 2
+  leaderApprover   User?    @relation("CommentLeaderApprover", fields: [leaderApproverId], references: [id])
+  leaderApprovedAt DateTime?
+
+  // Editor
+  editorId         String?
+  editor           User?    @relation("CommentEditorApprover", fields: [editorId], references: [id])
+  editorApprovedAt DateTime?
+
+  // Field boundary enforcement
+  // Set when comment is submitted — used by validateFieldBoundary middleware
+  requiredField String?
+
+  // Opinion points
+  opinionPointsAwarded    Int?     // Set when status becomes OPINION_VERIFIED
+  opinionPointsRequestedAt DateTime?
+
+  // Video structured response (JSONB — only for video comments)
+  structuredResponse Json?
+
+  likesCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  likes               CommentLike[]
+  opinionPointRequest OpinionPointRequest?
+
+  @@index([status])
+  @@index([authorId])
+  @@index([newsStoryId])
+  @@index([journalPaperId])
+  @@index([videoId])
+  @@index([parentId])
+  @@index([requiredField])
+}
+
+model CommentLike {
+  id        String  @id @default(cuid())
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([commentId, userId]) // One like per user per comment
+  @@index([commentId])
+}
+
+model OpinionPointRequest {
+  id        String  @id @default(cuid())
+  commentId String  @unique
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  requestedById String
+  requestedBy   User   @relation("OPRRequestedBy", fields: [requestedById], references: [id])
+
+  status String @default("PENDING") // "PENDING" | "EXPERT_APPROVED" | "LEADER_APPROVED" | "FULLY_APPROVED" | "REJECTED"
+
+  rejectionReason   String? @db.Text
+  rejectedById      String?
+  rejectedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([requestedById])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POINTS — Critical: per-batch expiry tracking
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PointTransaction {
+  id     String     @id @default(cuid())
+  userId String
+  user   User       @relation(fields: [userId], references: [id])
+
+  amount  Int        // Positive or negative
+  type    String     // "OPINION_EARNED" | "FEATURED_EARNED" | "ACTIVATED" | "EXPIRED" | "WIPED"
+  state   PointState
+
+  batchId  String? // Links to PendingPointExpiry.id for traceability
+  reason   String? @db.Text
+  referenceId String? // e.g., commentId that triggered the transaction
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, state])
+  @@index([createdAt])
+}
+
+model PendingPointExpiry {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  batchPoints Int    // Points in this specific batch
+  earnedAt    DateTime @default(now())
+  expiresAt   DateTime // earnedAt + 60 days — NEVER shared across batches
+
+  // Warning email flags — boolean ensures each email fires EXACTLY ONCE per batch
+  warningDay46 Boolean @default(false) // 14 days before expiry
+  warningDay53 Boolean @default(false) // 7 days before expiry
+  warningDay59 Boolean @default(false) // 1 day before expiry
+
+  state          PointState @default(PENDING)
+  presentationId String?    // Set when ACTIVE (approved) or WIPED (cancelled)
+
+  commentId  String? // The comment that triggered this batch
+  referenceId String? // Generic reference
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, state])
+  @@index([expiresAt, state]) // Critical for cron job efficiency — must be indexed
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRESENTATIONS — External meeting links, no file uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PresentationRequest {
+  id       String @id @default(cuid())
+  memberId String
+  member   User   @relation("MemberPresentations", fields: [memberId], references: [id])
+  leaderId String
+  leader   User   @relation("LeaderPresentations", fields: [leaderId], references: [id])
+
+  status PresentationStatus @default(PENDING)
+
+  // Request lifecycle timestamps
+  requestedAt           DateTime  @default(now())
+  firstRequestAt        DateTime? // Day 1 timestamp
+  secondRequestAt       DateTime? // Day 5 timestamp (after re-request)
+  escalatedAt           DateTime? // Day 10 timestamp
+  escalatedToManagerAt  DateTime?
+  scheduledAt           DateTime?
+  completedAt           DateTime?
+
+  // Meeting details — all ENCRYPTED before storage
+  meetingPlatform MeetingPlatform?
+  meetingLink     String? // ENCRYPTED — external URL (Zoom/Meet/Teams)
+  scheduledFor    DateTime?
+
+  // Post-presentation decision — all ENCRYPTED
+  leaderDecision     LeaderDecision?
+  leaderNote         String? @db.Text // ENCRYPTED — feedback to member
+  cancellationReason String? @db.Text // ENCRYPTED — detailed reason
+  evidenceLink       String? // ENCRYPTED — recording link on Zoom/Meet (optional)
+
+  // Points
+  pointsActivated Int @default(0)
+  pointsCancelled Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([memberId])
+  @@index([leaderId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KNOWLEDGE LIBRARY
+// ─────────────────────────────────────────────────────────────────────────────
+
+model KnowledgeTopic {
+  id           String @id @default(cuid())
+  name         String
+  slug         String @unique
+  description  String @db.Text
+  iconName     String // Lucide icon name
+  displayOrder Int    @default(0)
+  isActive     Boolean @default(true)
+
+  papers JournalPaper[]
+}
+
+model JournalPaper {
+  id      String @id @default(cuid())
+  topicId String
+  topic   KnowledgeTopic @relation(fields: [topicId], references: [id])
+
+  title           String
+  authors         String
+  institution     String?
+  publicationYear Int
+  journalName     String?
+
+  abstractOriginal   String  @db.Text
+  abstractSimplified String? @db.Text // AI-generated — empty on failure
+  keyFindings        Json    @default("[]") // String array
+
+  sourceUrl String?
+  doi       String?
+
+  timelinePosition Float  // Decimal for between-entry insertion (e.g., 2023.5)
+
+  addedById String
+  addedBy   User   @relation("PaperAddedBy", fields: [addedById], references: [id])
+  addedAt   DateTime @default(now())
+  isPublished Boolean @default(false)
+
+  opinions Opinion[]
+  comments Comment[]
+
+  // Full-text search vector
+  searchVector Unsupported("tsvector")?
+
+  @@index([topicId])
+  @@index([timelinePosition])
+  @@index([publicationYear])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FOREIGN POLICY
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Country {
+  id        String  @id @default(cuid())
+  name      String
+  code      String  @unique // ISO 3166-1 alpha-2
+  region    String
+  flagEmoji String
+  isActive  Boolean @default(true)
+
+  currentPolicyOverview Json? // JSON — key policy areas summary
+
+  policyEntries ForeignPolicyEntry[]
+
+  @@index([region])
+}
+
+model ForeignPolicyEntry {
+  id        String  @id @default(cuid())
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id])
+
+  title       String
+  description String @db.Text
+  policyArea  String
+  changeType  PolicyShiftType
+  entryDate   DateTime
+
+  officialSourceUrl   String?
+  relatedNewsStoryIds String[] @default([]) // Array of NewsStory IDs
+
+  expertAnnotation  String? @db.Text
+  annotatedById     String?
+  annotatedBy       User?   @relation("PolicyEntryAnnotatedBy", fields: [annotatedById], references: [id])
+  annotatedAt       DateTime?
+
+  addedById String
+  addedBy   User   @relation("PolicyEntryAddedBy", fields: [addedById], references: [id])
+  addedAt   DateTime @default(now())
+
+  // Policy entries are append-only — NEVER edit, only add new rows
+
+  @@index([countryId])
+  @@index([entryDate(sort: Desc)])
+  @@index([policyArea])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIDEO — Bunny Stream primary, external embed fallback
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Video {
+  id          String  @id @default(cuid())
+  title       String
+  slug        String  @unique
+  description String? @db.Text
+
+  // ── Bunny Stream (primary) ────────────────────────────────────────────────
+  bunnyVideoId   String?           @unique // Bunny GUID
+  bunnyLibraryId Int?
+  uploadStatus   VideoUploadStatus @default(PENDING)
+  encodingStatus String?           // Raw Bunny status string
+  duration       Int?              // Seconds — set by Bunny webhook
+
+  // ── External embed fallback (YouTube, Vimeo, etc.) ────────────────────────
+  externalEmbedType ExternalEmbedType?
+  externalEmbedId   String?           // YouTube/Vimeo ID
+  externalEmbedUrl  String?           // Full URL for DIRECT_URL type
+
+  thumbnailUrl String? // Bunny CDN URL or custom upload
+
+  // ── Content ───────────────────────────────────────────────────────────────
+  discussionBrief            String? @db.Text // The analytical challenge for members
+  expertBreakdown            String? @db.Text // Model answer — shown after member comments
+  expertBreakdownAuthorId    String?
+
+  // ── Classification ────────────────────────────────────────────────────────
+  topicField      String?
+  difficultyLevel VideoDifficulty @default(BEGINNER)
+  isPublished     Boolean         @default(false)
+  publishedAt     DateTime?
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  viewCount    Int @default(0)
+  commentCount Int @default(0)
+
+  addedById String
+  addedBy   User   @relation("VideoAddedBy", fields: [addedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments Comment[]
+
+  @@index([isPublished])
+  @@index([topicField])
+  @@index([uploadStatus])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESEARCH ECOSYSTEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ResearchGroup {
+  id          String @id @default(cuid())
+  name        String
+  field       String
+  description String @db.Text
+  chairId     String
+  chair       User   @relation("GroupChair", fields: [chairId], references: [id])
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teams ResearchTeam[]
+
+  @@index([field])
+}
+
+model ResearchTeam {
+  id           String @id @default(cuid())
+  groupId      String
+  group        ResearchGroup @relation(fields: [groupId], references: [id])
+  name         String
+  paperTitle   String
+  paperAbstract String? @db.Text
+  teamLeadId   String
+  teamLead     User   @relation("TeamLead", fields: [teamLeadId], references: [id])
+
+  status         ResearchTeamStatus @default(FORMING)
+  maxMembers     Int                @default(6)
+  openSpots      Int                @default(6)
+  publishedPaperUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members      ResearchTeamMember[]
+  applications ResearchTeamApplication[]
+
+  @@index([groupId])
+  @@index([status])
+}
+
+model ResearchTeamMember {
+  id           String             @id @default(cuid())
+  teamId       String
+  team         ResearchTeam       @relation(fields: [teamId], references: [id])
+  userId       String
+  user         User               @relation(fields: [userId], references: [id])
+  role         ResearchTeamMemberRole @default(CONTRIBUTOR)
+  contribution String? @db.Text
+  joinedAt     DateTime           @default(now())
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+model ResearchTeamApplication {
+  id     String       @id @default(cuid())
+  teamId String
+  team   ResearchTeam @relation(fields: [teamId], references: [id])
+  userId String
+  user   User         @relation(fields: [userId], references: [id])
+
+  // ENCRYPTED fields
+  motivation   String @db.Text // ENCRYPTED
+  background   String @db.Text // ENCRYPTED
+  contribution String @db.Text
+
+  status     ApplicationStatus @default(PENDING)
+  appliedAt  DateTime          @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  @@unique([teamId, userId]) // One application per user per team
+  @@index([teamId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESEARCH ACADEMY
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AcademyCourse {
+  id          String       @id @default(cuid())
+  title       String
+  track       AcademyTrack
+  description String       @db.Text
+  order       Int          @default(0)
+  isPublished Boolean      @default(false)
+
+  modules  AcademyModule[]
+  progress MemberCourseProgress[]
+
+  @@index([track])
+  @@index([order])
+}
+
+model AcademyModule {
+  id                  String @id @default(cuid())
+  courseId            String
+  course              AcademyCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title               String
+  content             String @db.Text // Rich text (TipTap HTML)
+  videoUrl            String?
+  exerciseDescription String? @db.Text
+  quizData            Json?
+  order               Int    @default(0)
+
+  progress MemberCourseProgress[]
+
+  @@index([courseId, order])
+}
+
+model MemberCourseProgress {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  courseId String
+  course   AcademyCourse @relation(fields: [courseId], references: [id])
+  moduleId String
+  module   AcademyModule @relation(fields: [moduleId], references: [id])
+
+  completedAt DateTime?
+  quizScore   Int?
+
+  @@unique([userId, moduleId]) // One progress record per user per module
+  @@index([userId, courseId])
+}
+
+model CourseCertificate {
+  id            String @id @default(cuid())
+  userId        String
+  courseId      String
+  verificationHash String @unique // Public verification hash — /verify/{hash}
+  issuedAt      DateTime @default(now())
+
+  @@unique([userId, courseId])
+  @@index([verificationHash])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAPER REVIEW SERVICE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PaperReviewSubmission {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  title    String
+  abstract String @db.Text
+
+  // ENCRYPTED — Supabase Storage path
+  paperFileUrl String // ENCRYPTED
+
+  status             PaperReviewStatus @default(SUBMITTED)
+  assignedReviewerId String?
+  assignedReviewer   User?   @relation("ReviewerAssigned", fields: [assignedReviewerId], references: [id])
+
+  // ENCRYPTED — private reviewer feedback
+  feedbackReport String? @db.Text // ENCRYPTED
+
+  submittedAt      DateTime  @default(now())
+  reviewedAt       DateTime?
+  publishedPaperUrl String?
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  type     String               // NotificationType enum value
+  priority NotificationPriority @default(NORMAL)
+  title    String
+  message  String @db.Text
+
+  isRead    Boolean @default(false)
+  actionUrl String?
+
+  referenceType String?
+  referenceId   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MEMBER GROWTH REPORTS (AI-generated monthly)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model MemberGrowthReport {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+
+  reportMonth DateTime // First day of the month this report covers
+  content     String   @db.Text // AI-generated analysis — stored, not re-generated on view
+  flagged     Boolean  @default(false) // True if consistency gap detected
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, reportMonth])
+  @@index([userId])
+}

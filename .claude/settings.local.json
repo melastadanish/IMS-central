@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --version)",
+      "Bash(npm --version)",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//Users/waqasdanish/**)",
+      "Read(//usr/local/lib/**)",
+      "Bash(ls /opt/homebrew/bin/node /usr/local/bin/node ~/.nvm/versions/node/*/bin/node)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(ls /opt/homebrew/bin/pnpm /opt/homebrew/bin/npm /usr/local/bin/pnpm /usr/local/bin/npm ~/.nvm/versions/node/*/bin/pnpm)",
+      "Bash(export PATH=\"/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH\")",
+      "Bash(curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh)",
+      "Bash(bash)",
+      "Bash(export NVM_DIR=\"$HOME/.nvm\")",
+      "Bash(. \"$NVM_DIR/nvm.sh\")",
+      "Bash(nvm install:*)",
+      "Bash(chmod +x \"/Volumes/Danish''s Work/Clude Projects/IMS Central/.claude/dev.sh\")",
+      "Bash(export NVM_DIR=$HOME/.nvm)",
+      "Bash(. $NVM_DIR/nvm.sh)",
+      "Read(//Volumes/Danish''''''''s Work/Clude Projects/**)",
+      "Bash(pnpm add:*)",
+      "Bash(node -e \":*)",
+      "Bash(pnpm exec:*)"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "All (Turbo — frontend + API together)",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["/Volumes/Danish's Work/Clude Projects/IMS Central/.claude/dev.sh"],
+      "port": 3000
+    },
+    {
+      "name": "Frontend (Next.js — port 3000)",
+      "runtimeExecutable": "/Users/waqasdanish/.nvm/versions/node/v22.22.1/bin/pnpm",
+      "runtimeArgs": ["--filter", "@ims/web", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "API (Express — port 3001)",
+      "runtimeExecutable": "/Users/waqasdanish/.nvm/versions/node/v22.22.1/bin/pnpm",
+      "runtimeArgs": ["--filter", "@ims/api", "dev"],
+      "port": 3001
+    }
+  ]
+}
