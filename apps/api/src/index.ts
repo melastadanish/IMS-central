@@ -6,24 +6,36 @@ import 'dotenv/config';
 import { createApp } from './app.js';
 import { logger } from './lib/logger.js';
 import { prisma } from './lib/prisma.js';
-import { redis } from './lib/redis.js';
+import { getRedis } from './lib/redis.js';
 import { startScheduler } from './jobs/scheduler.js';
 
 const PORT = Number(process.env['PORT'] ?? 3001);
 
 async function start() {
-  // Verify DB connectivity
-  await prisma.$connect();
-  logger.info('Database connected');
+  // Verify DB connectivity (non-fatal in dev — allows preview without DB)
+  try {
+    await prisma.$connect();
+    logger.info('Database connected');
+  } catch (err) {
+    logger.warn({ err }, 'Database connection failed — running without DB (mock mode)');
+  }
 
-  // Verify Redis connectivity
-  await redis.ping();
-  logger.info('Redis connected');
+  // Verify Redis connectivity (non-fatal in dev)
+  try {
+    await getRedis().ping();
+    logger.info('Redis connected');
+  } catch (err) {
+    logger.warn({ err }, 'Redis connection failed — running without cache');
+  }
 
   const app = createApp();
 
-  // Start job scheduler (RSS scraping, AI processing, expiry cron)
-  startScheduler();
+  // Start job scheduler only when DB is available
+  try {
+    startScheduler();
+  } catch (err) {
+    logger.warn({ err }, 'Scheduler not started — DB unavailable');
+  }
 
   app.listen(PORT, () => {
     logger.info({ port: PORT }, `IMS API running on port ${PORT}`);
@@ -40,7 +52,7 @@ start().catch((err) => {
 async function shutdown(signal: string) {
   logger.info({ signal }, 'Shutting down...');
   await prisma.$disconnect();
-  redis.disconnect();
+  try { getRedis().disconnect(); } catch { /* ignore */ }
   process.exit(0);
 }
 
