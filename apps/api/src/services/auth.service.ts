@@ -18,6 +18,7 @@ import {
 import { redis } from '../lib/redis.js';
 import { logger } from '../lib/logger.js';
 import type { RegisterInput, LoginInput } from '../routes/auth/auth.validation.js';
+import type { MemberType } from '@prisma/client';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,7 @@ export async function register(input: RegisterInput, res: Response) {
   }
 
   const passwordHash = await hashPassword(input.password);
+  const memberType: MemberType = input.userType === 'IMS_MEMBER' ? 'IMS_MEMBER' : 'NON_IMS_MEMBER';
 
   const user = await prisma.user.create({
     data: {
@@ -106,7 +108,7 @@ export async function register(input: RegisterInput, res: Response) {
       username,
       role: 'MEMBER',
       level: 'MEMBER',
-      memberType: 'STANDARD',
+      memberType,
       isActive: true,
       isEmailVerified: false,
       pendingPoints: 0,

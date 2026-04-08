@@ -20,7 +20,9 @@ export const registerSchema = z.object({
       .string()
       .min(3, 'Username must be at least 3 characters')
       .max(30, 'Username too long')
-      .regex(/^[a-z0-9-_]+$/, 'Username may only contain lowercase letters, numbers, hyphens, and underscores'),
+      .regex(/^[a-z0-9-_]+$/, 'Username may only contain lowercase letters, numbers, hyphens, and underscores')
+      .optional(),
+    userType: z.enum(['IMS_MEMBER', 'NON_IMS_MEMBER']).default('NON_IMS_MEMBER'),
   }),
 });
 
