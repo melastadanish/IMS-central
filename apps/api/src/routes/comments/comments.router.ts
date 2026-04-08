@@ -390,4 +390,32 @@ router.post(
   },
 );
 
+// ── GET /verified-recent (for homepage) ───────────────────────────────────────
+
+router.get('/verified-recent', async (_req: Request, res: Response): Promise<void> => {
+  const opinions = await prisma.comment.findMany({
+    where: { status: 'OPINION_VERIFIED' },
+    orderBy: { publishedAt: 'desc' },
+    take: 3,
+    select: {
+      id: true,
+      content: true,
+      publishedAt: true,
+      author: {
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          level: true,
+          role: true,
+        },
+      },
+      targetType: true,
+      targetId: true,
+    },
+  });
+
+  res.json({ success: true, data: opinions });
+});
+
 export { router as commentsRouter };

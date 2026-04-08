@@ -2,6 +2,7 @@
 // IMS News Central — Videos Router
 //
 // GET  /api/v1/videos                      Paginated video list
+// GET  /api/v1/videos/featured            Featured video for homepage
 // GET  /api/v1/videos/:slug                Single video (no embed URL)
 // GET  /api/v1/videos/:id/player-url       Signed playback URL (auth required)
 // GET  /api/v1/videos/:id/status           Encoding status (poll while PROCESSING)
@@ -466,4 +467,26 @@ bunnyWebhookRouter.post('/', async (req: Request, res: Response): Promise<void> 
   res.json({ success: true });
 });
 
-export { router as videosRouter };
+export { router as videosRouter, router as bunnyWebhookRouter };
+
+// ── GET /featured ─────────────────────────────────────────────────────────────────────────
+
+router.get('/featured', async (_req: Request, res: Response): Promise<void> => {
+  const video = await prisma.video.findFirst({
+    where: { isPublished: true, uploadStatus: 'READY' },
+    orderBy: { viewCount: 'desc' },
+    take: 1,
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      description: true,
+      thumbnailUrl: true,
+      duration: true,
+      difficultyLevel: true,
+      topic: { select: { name: true, slug: true } },
+    },
+  });
+
+  res.json({ success: true, data: video });
+});

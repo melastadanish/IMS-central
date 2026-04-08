@@ -282,3 +282,29 @@ router.patch(
 );
 
 export { router as newsRouter };
+
+// ── GET /stats ─────────────────────────────────────────────────────────────────
+
+router.get('/stats', async (_req: Request, res: Response): Promise<void> => {
+  const [
+    storyCount,
+    opinionCount,
+    researcherCount,
+    memberCount,
+  ] = await Promise.all([
+    prisma.newsStory.count({ where: { isPublished: true } }),
+    prisma.comment.count({ where: { status: 'OPINION_VERIFIED' } }),
+    prisma.user.count({ where: { role: { in: ['FIELD_EXPERT', 'LEADER'] }, isActive: true } }),
+    prisma.user.count({ where: { role: 'MEMBER', isActive: true } }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      totalStories: storyCount,
+      verifiedOpinions: opinionCount,
+      activeResearchers: researcherCount,
+      members: memberCount,
+    },
+  });
+});
