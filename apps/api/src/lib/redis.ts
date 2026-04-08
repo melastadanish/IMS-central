@@ -36,6 +36,8 @@ export function getRedis(): Redis {
   return _redis;
 }
 
+export const redis = getRedis();
+
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 
 export async function cacheGet<T>(key: string): Promise<T | null> {
@@ -70,13 +72,14 @@ export async function cacheDeletePattern(pattern: string): Promise<void> {
 // ── Cache TTLs (seconds) ──────────────────────────────────────────────────────
 
 export const CACHE_TTL = {
-  NEWS_STORY: 5 * 60,           // 5 min
-  NEWS_FEED: 5 * 60,            // 5 min
-  NEWS_TRENDING: 10 * 60,       // 10 min
-  KNOWLEDGE_TOPIC: 60 * 60,     // 1 hour
-  USER_PROFILE: 5 * 60,         // 5 min
-  USER_POINTS: 60,              // 1 min
-  COUNTRY_POLICY: 15 * 60,      // 15 min
-  TOPIC_LIST: 60 * 60,          // 1 hour
-  COUNTRY_LIST: 60 * 60,        // 1 hour
+  NEWS_STORY: 5 * 60, // 5 min
+  NEWS_FEED: 5 * 60, // 5 min
+  NEWS_TRENDING: 10 * 60, // 10 min
+  KNOWLEDGE_TOPIC: 60 * 60, // 1 hour
+  USER_PROFILE: 5 * 60, // 5 min
+  USER_POINTS: 60, // 1 min
+  COUNTRY_POLICY: 15 * 60, // 15 min
+  TOPIC_LIST: 60 * 60, // 1 hour
+  COUNTRY_LIST: 60 * 60, // 1 hour
+  NEWS_TOPICS: 60 * 60, // 1 hour
 } as const;
