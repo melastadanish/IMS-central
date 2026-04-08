@@ -4,6 +4,7 @@ import './globals.css';
 import { QueryProvider } from '../components/providers/QueryProvider';
 import { AuthProvider } from '../components/providers/AuthProvider';
 import { Navbar } from '../components/layout/Navbar';
+import { Footer } from '../components/layout/Footer';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -24,11 +25,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="min-h-screen bg-white text-gray-900 font-sans antialiased">
+      <body className="min-h-screen bg-white text-gray-900 font-sans antialiased flex flex-col">
         <QueryProvider>
           <AuthProvider>
             <Navbar />
-            {children}
+            <main className="flex-1">{children}</main>
+            <Footer />
           </AuthProvider>
         </QueryProvider>
       </body>
