@@ -11,12 +11,12 @@ export default function NewsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-primary text-white py-10 px-6">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <h1 className="text-3xl font-bold">News Feed</h1>
           <p className="text-blue-200 mt-2">Multi-source coverage with AI-synthesized summaries</p>
         </div>
       </div>
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <Suspense fallback={<NewsFeedSkeleton />}>
           <NewsFeed />
         </Suspense>
