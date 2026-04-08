@@ -31,11 +31,13 @@ export async function submitComment({
   authorId,
   content,
   requiredField,
+  parentId,
 }: {
   storyId: string;
   authorId: string;
   content: string;
   requiredField?: string;
+  parentId?: string;
 }) {
   // Verify story exists and is published
   const story = await prisma.newsStory.findUnique({
@@ -47,6 +49,17 @@ export async function submitComment({
     return { success: false as const, code: 'NOT_FOUND', error: 'Story not found' };
   }
 
+  // If replying, verify parent comment exists and belongs to same story
+  if (parentId) {
+    const parentComment = await prisma.comment.findUnique({
+      where: { id: parentId },
+      select: { id: true, storyId: true },
+    });
+    if (!parentComment || parentComment.storyId !== storyId) {
+      return { success: false as const, code: 'NOT_FOUND', error: 'Parent comment not found' };
+    }
+  }
+
   const comment = await prisma.comment.create({
     data: {
       storyId,
@@ -56,6 +69,7 @@ export async function submitComment({
       requiredField: requiredField ?? null,
       isPublished: false,
       submittedAt: new Date(),
+      parentId: parentId ?? null,
     },
     select: { id: true, status: true, createdAt: true },
   });
@@ -418,9 +432,9 @@ export async function getStoryComments({
 }) {
   const skip = (page - 1) * pageSize;
 
-  const [comments, total] = await Promise.all([
+      const [comments, total] = await Promise.all([
     prisma.comment.findMany({
-      where: { storyId, isPublished: true },
+      where: { storyId, isPublished: true, parentId: null },
       orderBy: [{ status: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: pageSize,
@@ -434,13 +448,27 @@ export async function getStoryComments({
         author: {
           select: { id: true, name: true, username: true, avatarUrl: true, level: true, role: true },
         },
-        // Show checkmark only (not approver identities)
         fieldExpertApproverId: true,
         leaderApproverId: true,
-        _count: { select: { likes: true } },
+        _count: { select: { likes: true, replies: true } },
+        replies: {
+          where: { isPublished: true },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            content: true,
+            status: true,
+            publishedAt: true,
+            createdAt: true,
+            author: {
+              select: { id: true, name: true, username: true, avatarUrl: true, level: true, role: true },
+            },
+            _count: { select: { likes: true } },
+          },
+        },
       },
     }),
-    prisma.comment.count({ where: { storyId, isPublished: true } }),
+    prisma.comment.count({ where: { storyId, isPublished: true, parentId: null } }),
   ]);
 
   // Map: compute isVerified, hide FK IDs from public response

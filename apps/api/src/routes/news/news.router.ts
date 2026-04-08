@@ -196,6 +196,7 @@ router.get('/stories/:slug', async (req: Request, res: Response): Promise<void> 
           content: true,
           publishedAt: true,
           author: { select: { id: true, name: true, username: true, avatarUrl: true, level: true } },
+          authorType: true,
         },
         orderBy: { publishedAt: 'desc' },
         take: 10,

@@ -67,6 +67,7 @@ const submitSchema = z.object({
   storyId: z.string().uuid(),
   content: z.string().min(50, 'Comment must be at least 50 characters').max(5000, 'Comment too long'),
   requiredField: z.string().max(50).optional(),
+  parentId: z.string().uuid().optional(),
 });
 
 router.post('/', authenticate, async (req: Request, res: Response): Promise<void> => {
